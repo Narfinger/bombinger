@@ -1,4 +1,4 @@
-package GB
+package GBVideos
 
 import (
 	"net/url"

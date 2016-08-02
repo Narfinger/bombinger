@@ -1,27 +1,31 @@
 package main
+
 import (
 	"fmt"
-	"log"
+
+	"GBVideos"
 
 	"github.com/jroimartin/gocui"
 )
 
 func main() {
-	g := gocui.NewGui()
-	if err := g.Init(); err != nil {
-		log.Panicln(err)
-	}
-	defer g.Close()
+	var m = GBVideos.GetShows()
+	fmt.Println(m)
+	// g := gocui.NewGui()
+	// if err := g.Init(); err != nil {
+	// 	log.Panicln(err)
+	// }
+	// defer g.Close()
 
-	g.SetLayout(layout)
+	// g.SetLayout(layout)
 
-	if err := g.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, quit); err != nil {
-		log.Panicln(err)
-	}
+	// if err := g.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, quit); err != nil {
+	// 	log.Panicln(err)
+	// }
 
-	if err := g.MainLoop(); err != nil && err != gocui.ErrQuit {
-		log.Panicln(err)
-	}
+	// if err := g.MainLoop(); err != nil && err != gocui.ErrQuit {
+	// 	log.Panicln(err)
+	// }
 }
 
 func layout(g *gocui.Gui) error {

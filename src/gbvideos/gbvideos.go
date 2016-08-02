@@ -1,4 +1,4 @@
-package GBVideos
+package GB
 
 import (
 	"encoding/json"
@@ -6,20 +6,17 @@ import (
 )
 
 const api_url = "https://www.giantbomb.com/api"
-const videos_url, _ = Parse(api_url + "/videos")
-const shows_url, _ = Parse(api_url + "/video_shows")
-
-func getJson(url string, target interface{}) error {
-
-}
+const videos_url = api_url + "/videos"
+const shows_url = api_url + "/video_shows"
 
 func GetShows() VideoShows {
-	target = nil
-	r, err := http.Get(url)
+	var target VideoShows = nil
+	r, err := http.Get(shows_url)
 	if err != nil {
 		//return err
 	}
 	defer r.Body.Close()
 
-	return json.NewDecoder(r.Body).Decode(target)
+	json.NewDecoder(r.Body).Decode(target)
+	return target
 }

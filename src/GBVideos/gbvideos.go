@@ -6,7 +6,7 @@ import (
 )
 
 const api_url = "https://www.giantbomb.com/api"
-const videos_url = api_url + "/videos/&format=json&api_key=" + api_key
+const videos_url = api_url + "/videos/?format=json&api_key=" + api_key
 const shows_url = api_url + "/video_shows/?&format=json&api_key=" + api_key
 
 // func GetShows() (VideoShows, error) {
@@ -30,6 +30,14 @@ func GetVideos() (Videos, error) {
 		return nil, err
 	}
 	defer r.Body.Close()
-	json.NewDecoder(r.Body).Decode(target)
+
+	// var htmldata, _ = ioutil.ReadAll(r.Body)
+	// fmt.Println(string(htmldata))
+
+	var jerr = json.NewDecoder(r.Body).Decode(&target)
+	if jerr != nil {
+		return nil, jerr
+	}
+
 	return target.Results, nil
 }

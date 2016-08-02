@@ -9,8 +9,9 @@ import (
 )
 
 func main() {
-	var m = GBVideos.GetShows()
+	var m, err = GBVideos.GetShows()
 	fmt.Println(m)
+	fmt.Println(err)
 	// g := gocui.NewGui()
 	// if err := g.Init(); err != nil {
 	// 	log.Panicln(err)

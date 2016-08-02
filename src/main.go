@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	var m, err = GBVideos.GetShows()
+	var m, err = GBVideos.GetVideos()
 	fmt.Println(m)
 	fmt.Println(err)
 	// g := gocui.NewGui()

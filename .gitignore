@@ -3,6 +3,7 @@
 *.a
 *.so
 bombinger
+src/GBVideos/key.go
 
 # Folders
 _obj

@@ -88,8 +88,7 @@ fn get_config() -> Config {
             path: PathBuf::new(),
             time: chrono::Utc::now(),
         };
-        let string = toml::to_string(&c).expect("Error in formating default config");
-        fs::write("config.toml", string).expect("Error in writing default config");
+        write_config(&c);
         panic!("Please adjust config");
     }
 }
@@ -100,12 +99,17 @@ fn write_config(c: &Config) {
 }
 fn download_video(config: &Config, vid: &GiantBombVideo) -> reqwest::Result<()> {
     let mut path = config.path.clone();
-    let mut response = reqwest::get(vid.hd_url.as_ref().expect("Could not find url"))?;
+
+    let url = vid.hd_url.as_ref().unwrap().to_owned() + "?api_key=" + &config.gbkey;
+    //println!("Url: {}", url);
+    let mut response = reqwest::get(&url).expect("Could not find url");
 
     path.push(format!(
         "{}-{}-{}.mp4",
         vid.publish_date, vid.video_show.title, vid.name
     ));
+
+    println!("Downloading {:?}", path.to_str());
 
     let mut dest = File::create(&path).expect("Could not do file");
     copy(&mut response, &mut dest).expect("error in copy");
@@ -116,6 +120,7 @@ fn download_video(config: &Config, vid: &GiantBombVideo) -> reqwest::Result<()> 
 pub fn main() {
     let mut config = get_config();
     let videos = query_videos(&config);
+    println!("Found {} new videos", videos.len());
     for vid in videos {
         let res = download_video(&config, &vid);
         if res.is_err() {

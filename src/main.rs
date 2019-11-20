@@ -1,12 +1,21 @@
 use chrono::{offset::TimeZone, NaiveDateTime};
 use chrono_tz::US::Pacific;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::fs;
 use std::fs::File;
 use std::io::copy;
 use std::path::PathBuf;
+use toml;
 
 static LIMIT: &str = "10";
 const VID_URL: &str = "https://www.giantbomb.com/api/videos/?format=json&limit=";
+
+#[derive(Debug, Deserialize, Serialize)]
+struct Config {
+    path: PathBuf,
+    time: chrono::DateTime<chrono::Utc>,
+    gbkey: String,
+}
 
 #[derive(Debug, Deserialize)]
 struct GiantBombResult<T> {
@@ -45,7 +54,7 @@ pub fn from_giantbomb_datetime_to_timestamp(s: &str) -> i64 {
 }
 
 /// query giantbomb api and returns the result in a `GiantBombResult<T>`
-fn query_giantbomb<T>(t: &String, url: String) -> GiantBombResult<T>
+fn query_giantbomb<T>(t: &str, url: String) -> GiantBombResult<T>
 where
     T: serde::de::DeserializeOwned,
 {
@@ -59,71 +68,38 @@ where
 }
 
 /// query the giantbomb videos, filter them according to `date` and returns them
-fn query_videos(t: &String, date: chrono::DateTime<chrono::Utc>) -> Vec<GiantBombVideo> {
+fn query_videos(config: &Config) -> Vec<GiantBombVideo> {
     let qstring = VID_URL.to_string() + LIMIT;
-    let res = query_giantbomb(t, qstring).results;
+    let res = query_giantbomb(&config.gbkey, qstring).results;
     res.into_iter()
         .filter(|v: &GiantBombVideo| {
-            chrono::Utc.timestamp(from_giantbomb_datetime_to_timestamp(&v.publish_date), 0) > date
+            chrono::Utc.timestamp(from_giantbomb_datetime_to_timestamp(&v.publish_date), 0)
+                > config.time
         })
         .collect()
 }
 
-fn get_config_date() -> Option<chrono::DateTime<chrono::Utc>> {
-    let mut settings = config::Config::default();
-    settings
-        .merge(config::File::with_name("config"))
-        .and_then(|m| m.get("datetime"))
-        .ok()
-}
-
-fn get_config_key() -> String {
-    let mut settings = config::Config::default();
-    let merged_set = settings
-        .merge(config::File::with_name("config"))
-        .expect("Error in merging config");
-    let k = merged_set.get("gbkey");
-    if let Ok(key) = k {
-        key
+fn get_config() -> Config {
+    if let Ok(string) = fs::read_to_string("config.toml") {
+        toml::from_str(&string).expect("Error in reading config")
     } else {
-        merged_set
-            .set("gbkey", "PLEASEINSERTKEY")
-            .expect("Could not write config");
-        panic!("See settings file to get the key");
+        let c = Config {
+            gbkey: "NOTHING".to_string(),
+            path: PathBuf::new(),
+            time: chrono::Utc::now(),
+        };
+        let string = toml::to_string(&c).expect("Error in formating default config");
+        fs::write("config.toml", string).expect("Error in writing default config");
+        panic!("Please adjust config");
     }
 }
 
-fn get_config_download() -> PathBuf {
-    let mut settings = config::Config::default();
-    let merged_set = settings
-        .merge(config::File::with_name("config"))
-        .expect("Error in merge");
-    let p: std::result::Result<String, config::ConfigError> = merged_set.get("path");
-    if let Ok(path) = p {
-        let mut thepath = PathBuf::new();
-        thepath.push(path);
-        if !thepath.exists() {
-            panic!("Path does not exist: {:?}", thepath);
-        }
-        thepath
-    } else {
-        merged_set
-            .set("path", "PLEASEINSERTPATHHERE")
-            .expect("Could not write config");
-        panic!("See settings file to insert path");
-    }
+fn write_config(c: &Config) {
+    let string = toml::to_string(c).expect("Error in serializing config");
+    fs::write("config.toml", string).expect("Error in writing config");
 }
-
-fn update_config_date() {
-    let mut settings = config::Config::default();
-    settings
-        .merge(config::File::with_name("config"))
-        .and_then(|s| s.set("datetime", chrono::Utc::now().to_rfc3339()))
-        .expect("Could not write config data");
-}
-
-fn download_video(vid: &GiantBombVideo) -> reqwest::Result<()> {
-    let mut path = get_config_download();
+fn download_video(config: &Config, vid: &GiantBombVideo) -> reqwest::Result<()> {
+    let mut path = config.path.clone();
     let mut response = reqwest::get(vid.hd_url.as_ref().expect("Could not find url"))?;
 
     path.push(format!(
@@ -138,21 +114,18 @@ fn download_video(vid: &GiantBombVideo) -> reqwest::Result<()> {
 
 /// Update giantbomb videos and put them into the database
 pub fn main() {
-    let key = get_config_key();
-    if let Some(time) = get_config_date() {
-        let videos = query_videos(&key, time);
-        for vid in videos {
-            let res = download_video(&vid);
-            if res.is_err() {
-                println!(
-                    "download failed of {}, {}",
-                    vid.name,
-                    vid.hd_url.unwrap_or("".to_string())
-                );
-            }
+    let mut config = get_config();
+    let videos = query_videos(&config);
+    for vid in videos {
+        let res = download_video(&config, &vid);
+        if res.is_err() {
+            println!(
+                "download failed of {}, {}",
+                vid.name,
+                vid.hd_url.unwrap_or("".to_string())
+            );
         }
-        update_config_date();
-    } else {
-        update_config_date();
+        config.time = chrono::Utc::now();
     }
+    write_config(&config);
 }

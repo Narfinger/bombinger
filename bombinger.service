@@ -1,0 +1,9 @@
+[Unit]
+Description=download giantbomb videos
+
+[Service]
+Type=oneshot
+Nice=19
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+ExecStart=./target/release/bombinger

@@ -43,7 +43,7 @@ struct GiantBombVideo {
     pub publish_date: String,
     pub site_detail_url: String,
     pub image: GiantBombThumbnail,
-    pub video_show: GiantBombVideoShow,
+    pub video_show: Option<GiantBombVideoShow>,
 }
 
 pub fn from_giantbomb_datetime_to_timestamp(s: &str) -> i64 {
@@ -106,7 +106,12 @@ fn download_video(config: &Config, vid: &GiantBombVideo) -> reqwest::Result<()> 
 
     path.push(format!(
         "{}-{}-{}.mp4",
-        vid.publish_date, vid.video_show.title, vid.name
+        vid.publish_date,
+        &vid.video_show
+            .as_ref()
+            .map(|s| &s.title)
+            .unwrap_or(&"".to_string()),
+        vid.name
     ));
 
     println!("Downloading {:?}", path.to_str());
@@ -126,8 +131,8 @@ pub fn main() {
         if res.is_err() {
             println!(
                 "download failed of {}, {}",
-                vid.name,
-                vid.hd_url.unwrap_or("".to_string())
+                &vid.name,
+                &vid.hd_url.unwrap_or_else(|| "None".to_string())
             );
         }
         config.time = chrono::Utc::now();

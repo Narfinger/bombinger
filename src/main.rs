@@ -37,6 +37,8 @@ struct GiantBombVideoShow {
 struct GiantBombVideo {
     pub deck: String,
     pub hd_url: Option<String>,
+    pub high_url: Option<String>,
+    pub low_url: Option<String>,
     pub youtube_id: Option<String>,
     pub name: String,
     pub length_seconds: i64,

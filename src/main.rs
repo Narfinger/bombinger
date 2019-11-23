@@ -113,7 +113,7 @@ fn download_video(config: &Config, vid: &GiantBombVideo) -> reqwest::Result<()> 
             .as_ref()
             .map(|s| &s.title)
             .unwrap_or(&"".to_string()),
-        vid.name
+        vid.name.replace("/", "")
     ));
 
     println!("Downloading {:?}", path.to_str());

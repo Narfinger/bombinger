@@ -15,6 +15,7 @@ struct Config {
     path: PathBuf,
     time: chrono::DateTime<chrono::Utc>,
     gbkey: String,
+    exclude: Vec<String>, //excludes certain names (partial matches)
 }
 
 #[derive(Debug, Deserialize)]
@@ -74,6 +75,7 @@ fn query_videos(config: &Config) -> Vec<GiantBombVideo> {
     let qstring = VID_URL.to_string() + LIMIT;
     let res = query_giantbomb(&config.gbkey, qstring).results;
     res.into_iter()
+        .filter(|v: &GiantBombVideo| !config.exclude.iter().any(|substr| v.name.contains(substr)))
         .filter(|v: &GiantBombVideo| {
             chrono::Utc.timestamp(from_giantbomb_datetime_to_timestamp(&v.publish_date), 0)
                 > config.time
@@ -89,6 +91,7 @@ fn get_config() -> Config {
             gbkey: "NOTHING".to_string(),
             path: PathBuf::new(),
             time: chrono::Utc::now(),
+            exclude: Vec::new(),
         };
         write_config(&c);
         panic!("Please adjust config");

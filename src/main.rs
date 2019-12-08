@@ -143,4 +143,5 @@ pub fn main() {
         config.time = chrono::Utc::now();
     }
     write_config(&config);
+    println!("Finished downloading files");
 }

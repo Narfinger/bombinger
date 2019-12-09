@@ -140,8 +140,8 @@ pub fn main() {
                 &vid.hd_url.unwrap_or_else(|| "None".to_string())
             );
         }
-        config.time = chrono::Utc::now();
     }
+    config.time = chrono::Utc::now();
     write_config(&config);
     println!("Finished downloading files");
 }

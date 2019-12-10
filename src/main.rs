@@ -10,12 +10,13 @@ use toml;
 static LIMIT: &str = "10";
 const VID_URL: &str = "https://www.giantbomb.com/api/videos/?format=json&limit=";
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct Config {
     path: PathBuf,
     time: chrono::DateTime<chrono::Utc>,
     gbkey: String,
     exclude: Vec<String>, //excludes certain names (partial matches)
+    locked: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -50,10 +51,16 @@ struct GiantBombVideo {
 }
 
 pub fn from_giantbomb_datetime_to_timestamp(s: &str) -> i64 {
+    from_giantbomb_datetime(s).timestamp()
+}
+
+fn from_giantbomb_datetime(s: &str) -> chrono::DateTime<chrono::Utc> {
     let dt = NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S")
         .unwrap_or_else(|e| panic!("Error: {}", e));
-    let dttz = Pacific.from_local_datetime(&dt).unwrap();
-    dttz.timestamp()
+    Pacific
+        .from_local_datetime(&dt)
+        .unwrap()
+        .with_timezone(&chrono::Utc)
 }
 
 /// query giantbomb api and returns the result in a `GiantBombResult<T>`
@@ -92,6 +99,7 @@ fn get_config() -> Config {
             path: PathBuf::new(),
             time: chrono::Utc::now(),
             exclude: Vec::new(),
+            locked: false,
         };
         write_config(&c);
         panic!("Please adjust config");
@@ -102,6 +110,7 @@ fn write_config(c: &Config) {
     let string = toml::to_string(c).expect("Error in serializing config");
     fs::write("config.toml", string).expect("Error in writing config");
 }
+
 fn download_video(config: &Config, vid: &GiantBombVideo) -> reqwest::Result<()> {
     let mut path = config.path.clone();
 
@@ -129,6 +138,14 @@ fn download_video(config: &Config, vid: &GiantBombVideo) -> reqwest::Result<()> 
 /// Update giantbomb videos and put them into the database
 pub fn main() {
     let mut config = get_config();
+    if config.locked {
+        println!("Another instance is running (config file is locked). Aborting");
+        return;
+    }
+
+    config.locked = true;
+    write_config(&config);
+
     let videos = query_videos(&config);
     println!("Found {} new videos", videos.len());
     for vid in videos {
@@ -140,8 +157,13 @@ pub fn main() {
                 &vid.hd_url.unwrap_or_else(|| "None".to_string())
             );
         }
+
+        config.time = from_giantbomb_datetime(&vid.publish_date);
+        write_config(&config);
     }
+
     config.time = chrono::Utc::now();
+    config.locked = false;
     write_config(&config);
     println!("Finished downloading files");
 }

@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use chrono::{offset::TimeZone, NaiveDateTime};
 use chrono_tz::US::Pacific;
 use serde::{Deserialize, Serialize};
@@ -38,6 +38,7 @@ struct GiantBombVideoShow {
 
 #[derive(Debug, Deserialize)]
 struct GiantBombVideo {
+    pub guid: String,
     pub deck: String,
     pub hd_url: Option<String>,
     pub high_url: Option<String>,
@@ -128,7 +129,8 @@ fn download_video(config: &Config, vid: &GiantBombVideo) -> Result<()> {
         let mut response = reqwest::get(&url).context("Could not find url")?;
 
         path.push(format!(
-            "{}-{}-{}.mp4",
+            "{}-{}-{}-{}.mp4",
+            vid.guid,
             vid.publish_date,
             &vid.video_show
                 .as_ref()

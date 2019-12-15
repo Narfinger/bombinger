@@ -2,8 +2,9 @@
 Description=download giantbomb videos
 
 [Service]
-Type=simple
+Type=oneshot
 Nice=19
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7
+TimeoutStartSec=infinity
 ExecStart=./target/release/bombinger

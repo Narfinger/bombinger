@@ -3,6 +3,7 @@ Requires=bombinger.service
 
 [Timer]
 OnCalendar=3:00
+OnCalendar=14:00
 Persistent=false
 
 [Install]

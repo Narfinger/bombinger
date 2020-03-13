@@ -142,7 +142,10 @@ fn download_video(config: &Config, vid: &GiantBombVideo) -> Result<()> {
         println!("Downloading {:?}", path.to_str());
 
         let mut dest = File::create(&path).context("Could not do file")?;
-        copy(&mut response, &mut dest).context("error in copy")?;
+        if let Err(e) = copy(&mut response, &mut dest) {
+            fs::remove_file(path)?;
+            return Err(e).context("Error in copying file");
+        }
         Ok(())
     } else {
         Err(anyhow!("Could not read do url"))
@@ -174,6 +177,10 @@ pub fn main() {
         if let Err(e) = run(&mut config) {
             println!("Error in downloading");
             println!("E: {}", e);
+            config.locked = false;
+            write_config(&config).expect("Error in writing config, possible corrupt");
+            println!("Not updating config time as we aborted");
+            return;
         }
 
         config.time = chrono::Utc::now();

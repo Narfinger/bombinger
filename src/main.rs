@@ -171,6 +171,7 @@ pub fn main() {
             println!("Another instance is running (config file is locked). Aborting");
             return;
         }
+        let checked_time = chrono::Utc::now();
 
         config.locked = true;
         write_config(&config).expect("Config in weird state, aborting");
@@ -183,7 +184,7 @@ pub fn main() {
             return;
         }
 
-        config.time = chrono::Utc::now();
+        config.time = checked_time;
         config.locked = false;
         write_config(&config).expect("Error in writing config, possible corrupted");
         println!("Finished downloading files");

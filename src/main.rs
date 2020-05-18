@@ -11,6 +11,13 @@ use toml;
 static LIMIT: &str = "10";
 const VID_URL: &str = "https://www.giantbomb.com/api/videos/?format=json&limit=";
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+enum Resolution {
+    HD,
+    High,
+    Low,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct Config {
     path: PathBuf,
@@ -18,6 +25,7 @@ struct Config {
     gbkey: String,
     exclude: Vec<String>, //excludes certain names (partial matches)
     locked: bool,
+    resolution: Resolution,
 }
 
 #[derive(Debug, Deserialize)]
@@ -105,6 +113,7 @@ fn get_config() -> Result<Config> {
             time: chrono::Utc::now(),
             exclude: Vec::new(),
             locked: false,
+            resolution: Resolution::HD,
         };
         write_config(&c)?;
         panic!("Please adjust config");
@@ -119,8 +128,13 @@ fn write_config(c: &Config) -> Result<()> {
 fn download_video(config: &Config, vid: &GiantBombVideo) -> Result<()> {
     let mut path = config.path.clone();
 
-    let url = vid
-        .hd_url
+    let url_to_grab = match config.resolution {
+        Resolution::HD => &vid.hd_url,
+        Resolution::High => &vid.high_url,
+        Resolution::Low => &vid.low_url,
+    };
+
+    let url = url_to_grab
         .to_owned()
         .map(|v| v + "?api_key=" + &config.gbkey);
 

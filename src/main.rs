@@ -173,24 +173,30 @@ fn download_video(config: &Config, vid: &GiantBombVideo) -> Result<()> {
 fn run(config: &mut Config) -> Result<()> {
     let videos = query_videos(config)?;
     println!("Found {} new videos", videos.len());
-    for vid in videos {
-        download_video(config, &vid).with_context(|| format!("Error in video {}", vid.name))?;
+    for vid in &videos {
+        download_video(config, vid).with_context(|| format!("Error in video {}", vid.name))?;
         config.time = from_giantbomb_datetime(&vid.publish_date).expect("Error in parsing time");
         write_config(config)?;
     }
 
     //write log file
     if !config.write_to.is_empty() {
-        let f = File::open(&config.write_to).or_else(|_| File::create(&config.write_to))?;
-        let mut buff = String::new();
-        f.read_to_string(&mut buff)?;
-        let keep_lines = buff
-            .lines()
-            .take(LIMIT_TEXT_OUTPUT)
-            .map(|s| String::from(s));
-        let new = videos.iter().map(|v| v.name)
-        let res = new.chain(keep_lines).map(|s| s + "\n").collect::<String>();
-        f.write_all(res.as_bytes())?;
+        let f = File::open(&config.write_to);
+        let new = videos.into_iter().map(|v| v.name);
+        let all = if let Ok(mut f) = f {
+            let mut buff = String::new();
+            f.read_to_string(&mut buff)?;
+            let old = buff
+                .lines()
+                .take(LIMIT_TEXT_OUTPUT)
+                .map(|s| String::from(s));
+            new.chain(old).map(|s| s + "\n").collect::<String>()
+        } else {
+            new.map(|s| s + "\n").collect::<String>()
+        };
+
+        let mut write_f = File::create(&config.write_to)?;
+        write_f.write_all(all.as_bytes())?;
     }
 
     Ok(())

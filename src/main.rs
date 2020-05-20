@@ -5,10 +5,12 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::fs::File;
 use std::io::copy;
+use std::io::prelude::*;
 use std::path::PathBuf;
 use toml;
 
 static LIMIT: &str = "10";
+static LIMIT_TEXT_OUTPUT: usize = 10;
 const VID_URL: &str = "https://www.giantbomb.com/api/videos/?format=json&limit=";
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -26,6 +28,7 @@ struct Config {
     exclude: Vec<String>, //excludes certain names (partial matches)
     locked: bool,
     resolution: Resolution,
+    write_to: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -114,6 +117,7 @@ fn get_config() -> Result<Config> {
             exclude: Vec::new(),
             locked: false,
             resolution: Resolution::HD,
+            write_to: String::new(),
         };
         write_config(&c)?;
         panic!("Please adjust config");
@@ -174,6 +178,21 @@ fn run(config: &mut Config) -> Result<()> {
         config.time = from_giantbomb_datetime(&vid.publish_date).expect("Error in parsing time");
         write_config(config)?;
     }
+
+    //write log file
+    if !config.write_to.is_empty() {
+        let f = File::open(&config.write_to).or_else(|_| File::create(&config.write_to))?;
+        let mut buff = String::new();
+        f.read_to_string(&mut buff)?;
+        let keep_lines = buff
+            .lines()
+            .take(LIMIT_TEXT_OUTPUT)
+            .map(|s| String::from(s));
+        let new = videos.iter().map(|v| v.name)
+        let res = new.chain(keep_lines).map(|s| s + "\n").collect::<String>();
+        f.write_all(res.as_bytes())?;
+    }
+
     Ok(())
 }
 

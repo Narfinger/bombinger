@@ -85,8 +85,8 @@ where
     q.push_str("&api_key=");
     q.push_str(&t);
     //println!("Query: {}", q);
-    reqwest::get(q.as_str())
-        .and_then(|mut s| s.json())
+    reqwest::blocking::get(q.as_str())
+        .and_then(|s| s.json())
         .context("Error in parsing json to get list of videos")
 }
 
@@ -144,7 +144,7 @@ fn download_video(config: &Config, vid: &GiantBombVideo) -> Result<()> {
 
     if let Some(url) = url {
         //println!("Url: {}", url);
-        let mut response = reqwest::get(&url).context("Could not find url")?;
+        let mut response = reqwest::blocking::get(&url).context("Could not find url")?;
 
         path.push(format!(
             "{}-{}-{}-{}.mp4",

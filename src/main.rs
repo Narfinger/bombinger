@@ -1,13 +1,14 @@
 use anyhow::{anyhow, Context, Result};
 use chrono::{offset::TimeZone, NaiveDateTime};
 use chrono_tz::US::Pacific;
+use clap::{App, Arg};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::fs::File;
 use std::io::copy;
 use std::io::prelude::*;
+use std::path::Path;
 use std::path::PathBuf;
-use toml;
 
 static LIMIT: &str = "10";
 static LIMIT_TEXT_OUTPUT: usize = 10;
@@ -21,7 +22,7 @@ enum Resolution {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-struct Config {
+struct ReadConfig {
     path: PathBuf,
     time: chrono::DateTime<chrono::Utc>,
     gbkey: String,
@@ -29,6 +30,12 @@ struct Config {
     locked: bool,
     resolution: Resolution,
     write_to: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct Config {
+    config_path: PathBuf,
+    read_config: ReadConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -93,24 +100,34 @@ where
 /// query the giantbomb videos, filter them according to `date` and returns them
 fn query_videos(config: &Config) -> Result<Vec<GiantBombVideo>> {
     let qstring = VID_URL.to_string() + LIMIT;
-    let res = query_giantbomb(&config.gbkey, qstring).map(|v| v.results)?;
+    let res = query_giantbomb(&config.read_config.gbkey, qstring).map(|v| v.results)?;
     Ok(res
         .into_iter()
-        .filter(|v: &GiantBombVideo| !config.exclude.iter().any(|substr| v.name.contains(substr)))
+        .filter(|v: &GiantBombVideo| {
+            !config
+                .read_config
+                .exclude
+                .iter()
+                .any(|substr| v.name.contains(substr))
+        })
         .filter(|v: &GiantBombVideo| {
             chrono::Utc.timestamp(
                 from_giantbomb_datetime_to_timestamp(&v.publish_date).expect("Timestamp error"),
                 0,
-            ) > config.time
+            ) > config.read_config.time
         })
         .collect())
 }
 
-fn get_config() -> Result<Config> {
-    if let Ok(string) = fs::read_to_string("config.toml") {
-        toml::from_str(&string).context("Error in reading config")
+fn get_config(path: &Path) -> Result<Config> {
+    if let Ok(string) = fs::read_to_string(path) {
+        let read_config: ReadConfig = toml::from_str(&string).context("Error in reading config")?;
+        Ok(Config {
+            config_path: path.to_owned(),
+            read_config,
+        })
     } else {
-        let c = Config {
+        let c = ReadConfig {
             gbkey: "NOTHING".to_string(),
             path: PathBuf::new(),
             time: chrono::Utc::now(),
@@ -119,20 +136,23 @@ fn get_config() -> Result<Config> {
             resolution: Resolution::HD,
             write_to: String::new(),
         };
-        write_config(&c)?;
+        write_config(&Config {
+            read_config: c,
+            config_path: path.to_owned(),
+        })?;
         panic!("Please adjust config");
     }
 }
 
 fn write_config(c: &Config) -> Result<()> {
-    let string = toml::to_string(c).context("Error in serializing config")?;
-    fs::write("config.toml", string).context("Error in writing config")
+    let string = toml::to_string(&c.read_config).context("Error in serializing config")?;
+    fs::write(&c.config_path, string).context("Error in writing config")
 }
 
 fn download_video(config: &Config, vid: &GiantBombVideo) -> Result<()> {
-    let mut path = config.path.clone();
+    let mut path = config.read_config.path.clone();
 
-    let url_to_grab = match config.resolution {
+    let url_to_grab = match config.read_config.resolution {
         Resolution::HD => &vid.hd_url,
         Resolution::High => &vid.high_url,
         Resolution::Low => &vid.low_url,
@@ -140,7 +160,7 @@ fn download_video(config: &Config, vid: &GiantBombVideo) -> Result<()> {
 
     let url = url_to_grab
         .to_owned()
-        .map(|v| v + "?api_key=" + &config.gbkey);
+        .map(|v| v + "?api_key=" + &config.read_config.gbkey);
 
     if let Some(url) = url {
         //println!("Url: {}", url);
@@ -175,27 +195,25 @@ fn run(config: &mut Config) -> Result<()> {
     println!("Found {} new videos", videos.len());
     for vid in &videos {
         download_video(config, vid).with_context(|| format!("Error in video {}", vid.name))?;
-        config.time = from_giantbomb_datetime(&vid.publish_date).expect("Error in parsing time");
+        config.read_config.time =
+            from_giantbomb_datetime(&vid.publish_date).expect("Error in parsing time");
         write_config(config)?;
     }
 
     //write log file
-    if !config.write_to.is_empty() {
-        let f = File::open(&config.write_to);
+    if !config.read_config.write_to.is_empty() {
+        let f = File::open(&config.read_config.write_to);
         let new = videos.into_iter().map(|v| v.name);
         let all = if let Ok(mut f) = f {
             let mut buff = String::new();
             f.read_to_string(&mut buff)?;
-            let old = buff
-                .lines()
-                .take(LIMIT_TEXT_OUTPUT)
-                .map(|s| String::from(s));
+            let old = buff.lines().take(LIMIT_TEXT_OUTPUT).map(String::from);
             new.chain(old).map(|s| s + "\n").collect::<String>()
         } else {
             new.map(|s| s + "\n").collect::<String>()
         };
 
-        let mut write_f = File::create(&config.write_to)?;
+        let mut write_f = File::create(&config.read_config.write_to)?;
         write_f.write_all(all.as_bytes())?;
     }
 
@@ -204,27 +222,41 @@ fn run(config: &mut Config) -> Result<()> {
 
 /// Update giantbomb videos and put them into the database
 pub fn main() {
-    let config = get_config();
+    let matches = App::new("bombinger")
+        .arg(
+            Arg::with_name("config")
+                .short("c")
+                .required(true)
+                .long("config")
+                .value_name("FILE")
+                .help("Sets a custom config file")
+                .takes_value(true),
+        )
+        .get_matches();
+
+    let config_path: PathBuf = matches.value_of("config").unwrap_or("config.toml").into();
+
+    let config = get_config(&config_path);
     if let Ok(mut config) = config {
-        if config.locked {
+        if config.read_config.locked {
             println!("Another instance is running (config file is locked). Aborting");
             return;
         }
         let checked_time = chrono::Utc::now();
 
-        config.locked = true;
+        config.read_config.locked = true;
         write_config(&config).expect("Config in weird state, aborting");
         if let Err(e) = run(&mut config) {
             println!("Error in downloading");
             println!("E: {}", e);
-            config.locked = false;
+            config.read_config.locked = false;
             write_config(&config).expect("Error in writing config, possible corrupt");
             println!("Not updating config time as we aborted");
             return;
         }
 
-        config.time = checked_time;
-        config.locked = false;
+        config.read_config.time = checked_time;
+        config.read_config.locked = false;
         write_config(&config).expect("Error in writing config, possible corrupted");
         println!("Finished downloading files");
     } else {
